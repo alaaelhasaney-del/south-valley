@@ -1,0 +1,66 @@
+
+=====================================
+MIGRATION REPORT
+=====================================
+Generated: 2026-06-02T01:23:13.610Z
+
+SUMMARY:
+========
+Total Successful: 35
+Total Errors: 12
+
+SUCCESSFUL MIGRATIONS:
+=====================
+[2026-06-02T01:22:59.181Z] INFO: ==================================================
+[2026-06-02T01:22:59.182Z] INFO: Starting photo migration process...
+[2026-06-02T01:22:59.183Z] INFO: ==================================================
+[2026-06-02T01:23:00.310Z] INFO: Found 12 students with photos to migrate
+[2026-06-02T01:23:00.310Z] INFO: --------------------------------------------------
+[2026-06-02T01:23:00.311Z] INFO: Uploading image for student 1: student-1-1780363380311.jpg
+[2026-06-02T01:23:01.065Z] INFO: ✓ Successfully uploaded image for student 1: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-1-1780363380311.jpg
+[2026-06-02T01:23:01.269Z] INFO: Uploading image for student 3: student-3-1780363381269.jpg
+[2026-06-02T01:23:01.677Z] INFO: ✓ Successfully uploaded image for student 3: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-3-1780363381269.jpg
+[2026-06-02T01:23:02.435Z] INFO: Uploading image for student 4: student-4-1780363382434.jpg
+[2026-06-02T01:23:02.929Z] INFO: ✓ Successfully uploaded image for student 4: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-4-1780363382434.jpg
+[2026-06-02T01:23:03.568Z] INFO: Uploading image for student 5: student-5-1780363383568.jpg
+[2026-06-02T01:23:04.065Z] INFO: ✓ Successfully uploaded image for student 5: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-5-1780363383568.jpg
+[2026-06-02T01:23:04.715Z] INFO: Uploading image for student 6: student-6-1780363384715.jpg
+[2026-06-02T01:23:05.116Z] INFO: ✓ Successfully uploaded image for student 6: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-6-1780363384715.jpg
+[2026-06-02T01:23:05.731Z] INFO: Uploading image for student 7: student-7-1780363385731.jpg
+[2026-06-02T01:23:06.088Z] INFO: ✓ Successfully uploaded image for student 7: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-7-1780363385731.jpg
+[2026-06-02T01:23:06.713Z] INFO: Uploading image for student 11: student-11-1780363386713.jpg
+[2026-06-02T01:23:07.088Z] INFO: ✓ Successfully uploaded image for student 11: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-11-1780363386713.jpg
+[2026-06-02T01:23:07.712Z] INFO: Uploading image for student 12: student-12-1780363387711.jpg
+[2026-06-02T01:23:07.974Z] INFO: ✓ Successfully uploaded image for student 12: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-12-1780363387711.jpg
+[2026-06-02T01:23:08.591Z] INFO: Uploading image for student 13: student-13-1780363388591.jpg
+[2026-06-02T01:23:08.914Z] INFO: ✓ Successfully uploaded image for student 13: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-13-1780363388591.jpg
+[2026-06-02T01:23:09.712Z] INFO: Uploading image for student 14: student-14-1780363389712.jpg
+[2026-06-02T01:23:10.132Z] INFO: ✓ Successfully uploaded image for student 14: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-14-1780363389712.jpg
+[2026-06-02T01:23:10.929Z] INFO: Uploading image for student 15: student-15-1780363390929.jpg
+[2026-06-02T01:23:11.353Z] INFO: ✓ Successfully uploaded image for student 15: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-15-1780363390929.jpg
+[2026-06-02T01:23:12.108Z] INFO: Uploading image for student 16: student-16-1780363392108.jpg
+[2026-06-02T01:23:12.761Z] INFO: ✓ Successfully uploaded image for student 16: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-16-1780363392108.jpg
+[2026-06-02T01:23:13.607Z] INFO: --------------------------------------------------
+[2026-06-02T01:23:13.608Z] INFO: Migration Summary:
+[2026-06-02T01:23:13.609Z] INFO:   ✓ Successful: 0
+[2026-06-02T01:23:13.609Z] INFO:   ⊘ Skipped: 0
+[2026-06-02T01:23:13.609Z] INFO:   ✗ Errors: 12
+[2026-06-02T01:23:13.609Z] INFO: ==================================================
+
+ERRORS:
+=======
+[2026-06-02T01:23:01.168Z] ERROR: ✗ Failed to update database for student 1: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:02.326Z] ERROR: ✗ Failed to update database for student 3: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:03.456Z] ERROR: ✗ Failed to update database for student 4: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:04.606Z] ERROR: ✗ Failed to update database for student 5: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:05.626Z] ERROR: ✗ Failed to update database for student 6: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:06.601Z] ERROR: ✗ Failed to update database for student 7: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:07.602Z] ERROR: ✗ Failed to update database for student 11: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:08.487Z] ERROR: ✗ Failed to update database for student 12: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:09.603Z] ERROR: ✗ Failed to update database for student 13: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:10.821Z] ERROR: ✗ Failed to update database for student 14: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:11.996Z] ERROR: ✗ Failed to update database for student 15: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T01:23:13.492Z] ERROR: ✗ Failed to update database for student 16: column "image_upload_date" of relation "students" does not exist
+
+====================================
+  

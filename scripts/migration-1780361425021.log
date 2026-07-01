@@ -1,0 +1,50 @@
+
+=====================================
+MIGRATION REPORT
+=====================================
+Generated: 2026-06-02T00:50:40.752Z
+
+SUMMARY:
+========
+Total Successful: 21
+Total Errors: 10
+
+SUCCESSFUL MIGRATIONS:
+=====================
+[2026-06-02T00:50:25.021Z] INFO: ==================================================
+[2026-06-02T00:50:25.024Z] INFO: Starting photo migration process...
+[2026-06-02T00:50:25.025Z] INFO: ==================================================
+[2026-06-02T00:50:31.659Z] INFO: Found 10 students with photos to migrate
+[2026-06-02T00:50:31.660Z] INFO: --------------------------------------------------
+[2026-06-02T00:50:31.661Z] INFO: Uploading image for student 1: student-1-1780361431660.jpg
+[2026-06-02T00:50:33.436Z] INFO: Uploading image for student 3: student-3-1780361433436.jpg
+[2026-06-02T00:50:34.085Z] INFO: Uploading image for student 4: student-4-1780361434085.jpg
+[2026-06-02T00:50:34.538Z] INFO: Uploading image for student 5: student-5-1780361434538.jpg
+[2026-06-02T00:50:35.007Z] INFO: Uploading image for student 6: student-6-1780361435007.jpg
+[2026-06-02T00:50:35.417Z] INFO: Uploading image for student 7: student-7-1780361435417.jpg
+[2026-06-02T00:50:35.888Z] INFO: Uploading image for student 11: student-11-1780361435888.jpg
+[2026-06-02T00:50:37.632Z] INFO: Uploading image for student 12: student-12-1780361437631.jpg
+[2026-06-02T00:50:37.959Z] INFO: Uploading image for student 13: student-13-1780361437959.jpg
+[2026-06-02T00:50:39.000Z] INFO: Uploading image for student 14: student-14-1780361439000.jpg
+[2026-06-02T00:50:40.751Z] INFO: --------------------------------------------------
+[2026-06-02T00:50:40.751Z] INFO: Migration Summary:
+[2026-06-02T00:50:40.751Z] INFO:   ✓ Successful: 0
+[2026-06-02T00:50:40.751Z] INFO:   ⊘ Skipped: 0
+[2026-06-02T00:50:40.751Z] INFO:   ✗ Errors: 10
+[2026-06-02T00:50:40.752Z] INFO: ==================================================
+
+ERRORS:
+=======
+[2026-06-02T00:50:33.436Z] ERROR: ✗ Failed to upload image for student 1: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:34.082Z] ERROR: ✗ Failed to upload image for student 3: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:34.538Z] ERROR: ✗ Failed to upload image for student 4: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:35.007Z] ERROR: ✗ Failed to upload image for student 5: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:35.414Z] ERROR: ✗ Failed to upload image for student 6: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:35.885Z] ERROR: ✗ Failed to upload image for student 7: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:37.527Z] ERROR: ✗ Failed to upload image for student 11: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:37.959Z] ERROR: ✗ Failed to upload image for student 12: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:38.999Z] ERROR: ✗ Failed to upload image for student 13: Storage upload failed: new row violates row-level security policy
+[2026-06-02T00:50:40.750Z] ERROR: ✗ Failed to upload image for student 14: Storage upload failed: new row violates row-level security policy
+
+====================================
+  

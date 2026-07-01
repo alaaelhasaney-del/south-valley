@@ -1,0 +1,3 @@
+Fix needed: dashboard-electron/src/pages/Print.jsx currently has broken/unbalanced code (unterminated string literal and stray tokens) introduced during attempted refactor of GraduateGradeReport.getTermGrades.
+Next step should be to restore Print.jsx from a known-good state (e.g., git checkout) or manually revert the GraduateGradeReport section to the original implementation, then re-apply only the minimal semester bucketing change safely.
+Because the previous attempts corrupted the file, please revert Print.jsx before any further edits.

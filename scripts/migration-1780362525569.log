@@ -1,0 +1,23 @@
+
+=====================================
+MIGRATION REPORT
+=====================================
+Generated: 2026-06-02T01:08:45.594Z
+
+SUMMARY:
+========
+Total Successful: 3
+Total Errors: 1
+
+SUCCESSFUL MIGRATIONS:
+=====================
+[2026-06-02T01:08:45.569Z] INFO: ==================================================
+[2026-06-02T01:08:45.571Z] INFO: Starting photo migration process...
+[2026-06-02T01:08:45.572Z] INFO: ==================================================
+
+ERRORS:
+=======
+[2026-06-02T01:08:45.593Z] ERROR: Critical error in migration: getaddrinfo ENOTFOUND aws-0-eu-west-1.pooler.supabase.com
+
+====================================
+  

@@ -1,0 +1,1067 @@
+const express = require("express");
+const { Pool } = require("pg");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
+
+// تحديد الحقول المسموح بها لكل جدول (Whitelist)
+const TABLE_SCHEMAS = {
+  branches: ["name", "location", "phone", "manager"],
+  users: ["name", "email", "password_hash", "role", "branch_id"],
+  students: [
+    "tenant_id",
+    "name",
+    "email",
+    "phone",
+    "guardian_phone",
+    "governorate",
+    "city",
+    "full_address",
+    "national_id",
+    "qualification",
+    "department_id",
+    "branch_id",
+    "class_year",
+    "photo_data",
+  ],
+  departments: ["name", "description", "branch_id"],
+  courses: ["name", "description", "price", "department_id"],
+  finances: [
+    "branch_id",
+    "date",
+    "revenue",
+    "expenses",
+    "cash_balance",
+    "notes",
+  ],
+  expense_items: [
+    "name",
+    "amount",
+    "department_id",
+    "branch_id",
+    "class_year",
+    "is_mandatory",
+    "is_service",
+    "description",
+  ],
+  role_permissions: [
+    "role",
+    "resource",
+    "can_read",
+    "can_create",
+    "can_update",
+    "can_delete",
+    "branch_access",
+  ],
+  student_fees: [
+    "student_id",
+    "expense_item_id",
+    "amount_due",
+    "amount_paid",
+    "status",
+    "is_selected",
+    "paid_date",
+  ],
+  student_grades: ["student_id", "course_id", "grade", "notes"],
+  student_attendance: ["student_id", "course_id", "date", "status", "notes"],
+};
+
+// Middleware
+app.use(express.json());
+app.use(require("cors")({
+  origin: ["http://localhost:5173", "http://localhost:3000"],
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(require("helmet")());
+
+// Postgres Pool (Supabase compatible)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+});
+
+// JWT Authentication Middleware
+const authenticateToken = async (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Access token required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userResult = await pool.query("SELECT * FROM users WHERE id = $1", [
+      decoded.id,
+    ]);
+    if (userResult.rows.length === 0) {
+      return res.status(403).json({ error: "Invalid token" });
+    }
+    req.user = userResult.rows[0];
+    next();
+  } catch (err) {
+    res.status(403).json({ error: "Invalid token" });
+  }
+};
+
+// Branch Restriction Middleware (except for admins)
+const restrictToBranch = (tables) => {
+  return async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
+    // Super admin has full access
+    if (req.user.role === "admin") return next();
+
+    const table = Object.keys(req.query).length
+      ? req.query.table || req.params.table
+      : req.path.split("/")[2];
+    if (!tables.includes(table)) return next();
+
+    // Add branch filter to query
+    req.branchFilter = `branch_id = ${req.user.branch_id}`;
+    next();
+  };
+};
+
+// Test DB connection
+pool.on("connect", () => console.log("Connected to DB"));
+pool.on("error", (err) => console.error("DB connection error:", err));
+
+// Generic CRUD functions
+async function getAll(table, res, joins = "") {
+  try {
+    const query = `SELECT * FROM ${table} ${joins}`;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+async function getById(table, id, res, idCol = "id") {
+  try {
+    const query = `SELECT * FROM ${table} WHERE ${idCol} = $1`;
+    const result = await pool.query(query, [id]);
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// دالة مساعدة لتنقية البيانات بناءً على القائمة المسموحة
+function filterData(table, data) {
+  const allowedFields = TABLE_SCHEMAS[table];
+  if (!allowedFields) return data; // إذا لم يوجد تعريف، نمرر البيانات كما هي (أو يمكن منعها)
+
+  const sanitizedData = {};
+  allowedFields.forEach((key) => {
+    if (data[key] !== undefined) {
+      // تحويل النصوص الفارغة إلى null لضمان سلامة قاعدة البيانات
+      sanitizedData[key] = data[key] === "" ? null : data[key];
+    }
+  });
+  return sanitizedData;
+}
+
+async function create(table, data, res) {
+  try {
+    let sanitizedData = filterData(table, data);
+    
+    // Auto-set tenant_id for single-tenant mode (default tenant 1)
+    if (table === 'students' && !sanitizedData.tenant_id) {
+      sanitizedData.tenant_id = 1;
+      console.log('Auto-set tenant_id=1 for new student');
+    }
+    
+    const keys = Object.keys(sanitizedData).join(", ");
+    const placeholders = Object.keys(sanitizedData)
+      .map((_, i) => `$${i + 1}`)
+      .join(", ");
+    const result = await pool.query(
+      `INSERT INTO ${table} (${keys}) VALUES (${placeholders}) RETURNING *`,
+      Object.values(sanitizedData),
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(`Error creating in ${table}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+async function update(table, id, data, res, idCol = "id") {
+  try {
+    let sanitizedData = filterData(table, data);
+    
+    // Preserve existing tenant_id, auto-set if missing for students
+    if (table === 'students' && !sanitizedData.tenant_id) {
+      sanitizedData.tenant_id = 1;
+      console.log('Auto-set tenant_id=1 for student update');
+    }
+    
+    const setClause = Object.keys(sanitizedData)
+      .map((key, i) => `${key} = $${i + 1}`)
+      .join(", ");
+    const query = `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE ${idCol} = $${Object.keys(sanitizedData).length + 1} RETURNING *`;
+    const values = [...Object.values(sanitizedData), id];
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(`Error updating ${table}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+async function remove(table, id, res, idCol = "id") {
+  try {
+    const query = `DELETE FROM ${table} WHERE ${idCol} = $1 RETURNING *`;
+    const result = await pool.query(query, [id]);
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// Routes for Branches
+app.get("/api/branches", (req, res) => getAll("branches", res));
+app.get("/api/branches/:id", (req, res) =>
+  getById("branches", req.params.id, res),
+);
+app.post("/api/branches", (req, res) => create("branches", req.body, res));
+app.put("/api/branches/:id", (req, res) =>
+  update("branches", req.params.id, req.body, res),
+);
+app.delete("/api/branches/:id", (req, res) =>
+  remove("branches", req.params.id, res),
+);
+
+// Routes for Users
+app.get("/api/users", (req, res) => getAll("users", res));
+app.get("/api/users/:id", (req, res) => getById("users", req.params.id, res));
+
+app.post("/api/users", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const sanitizedData = filterData("users", req.body);
+
+    // Hash password if provided
+    if (sanitizedData.password_hash) {
+      const saltRounds = 10;
+      sanitizedData.password_hash = await bcrypt.hash(
+        sanitizedData.password_hash,
+        saltRounds,
+      );
+    }
+
+    const keys = Object.keys(sanitizedData).join(", ");
+    const placeholders = Object.keys(sanitizedData)
+      .map((_, i) => `$${i + 1}`)
+      .join(", ");
+    const query = `INSERT INTO users (${keys}) VALUES (${placeholders}) RETURNING *`;
+    const result = await client.query(query, Object.values(sanitizedData));
+    await client.query("COMMIT");
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(`Error creating user:`, err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/users/:id", async (req, res) => {
+  try {
+    // نمنع تحديث كلمة المرور إذا كانت فارغة
+    const sanitizedData = filterData("users", req.body);
+
+    if (sanitizedData.password_hash) {
+      const saltRounds = 10;
+      sanitizedData.password_hash = await bcrypt.hash(
+        sanitizedData.password_hash,
+        saltRounds,
+      );
+    }
+
+    if (Object.keys(sanitizedData).length === 0) {
+      return getById("users", req.params.id, res);
+    }
+
+    const setClause = Object.keys(sanitizedData)
+      .map((key, i) => `${key} = $${i + 1}`)
+      .join(", ");
+    const values = [...Object.values(sanitizedData), req.params.id];
+    const query = `UPDATE users SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length} RETURNING *`;
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(`Error updating user:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete("/api/users/:id", (req, res) => remove("users", req.params.id, res));
+
+// Routes for Students
+app.get("/api/students", (req, res) => getAll("students", res));
+app.get("/api/students/:id", (req, res) =>
+  getById("students", req.params.id, res),
+);
+
+app.post("/api/students", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const sanitizedData = filterData("students", req.body);
+
+    // 1. إنشاء الطالب
+    const keys = Object.keys(sanitizedData).join(", ");
+    const placeholders = Object.keys(sanitizedData)
+      .map((_, i) => `$${i + 1}`)
+      .join(", ");
+    const studentQuery = `INSERT INTO students (${keys}) VALUES (${placeholders}) RETURNING *`;
+    const studentResult = await client.query(
+      studentQuery,
+      Object.values(sanitizedData),
+    );
+    const student = studentResult.rows[0];
+
+    // 2. ربط المصروفات الإلزامية تلقائياً
+    const assignFeesQuery = `
+      INSERT INTO student_fees (student_id, expense_item_id, amount_due, status)
+      SELECT $1, id, amount, 'pending' FROM expense_items
+      WHERE is_mandatory = true 
+      AND (department_id IS NULL OR department_id = $2)
+      AND (class_year IS NULL OR class_year = '' OR class_year = 'كل الفرق' OR class_year = $3)
+    `;
+    await client.query(assignFeesQuery, [
+      student.id,
+      student.department_id,
+      student.class_year,
+    ]);
+
+    await client.query("COMMIT");
+    res.status(201).json(student);
+  } catch (err) {
+    console.error("Error in POST /api/students transaction:", err.message);
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/students/:id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Branch restriction check
+    if (req.user && req.user.role !== "admin" && req.user.branch_id) {
+      const student = await client.query(
+        "SELECT branch_id FROM students WHERE id = $1",
+        [req.params.id],
+      );
+      if (student.rows[0] && student.rows[0].branch_id !== req.user.branch_id) {
+        throw new Error("Access denied: Student not in your branch");
+      }
+    }
+
+    const sanitizedData = filterData("students", req.body);
+
+    const setClause = Object.keys(sanitizedData)
+      .map((key, i) => `${key} = $${i + 1}`)
+      .join(", ");
+    const query = `UPDATE students SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${Object.keys(sanitizedData).length + 1} RETURNING *`;
+    const values = [...Object.values(sanitizedData), req.params.id];
+
+    const result = await client.query(query, values);
+
+    if (result.rows.length === 0) {
+      throw new Error("Student not found");
+    }
+
+    await client.query("COMMIT");
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(`Student update error [ID:${req.params.id}]:`, err.message);
+    res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+app.delete("/api/students/:id", (req, res) =>
+  remove("students", req.params.id, res),
+);
+
+// Routes for Departments
+app.get("/api/departments", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT d.*, 
+              COALESCE(json_agg(db.branch_id ORDER BY db.branch_id) FILTER (WHERE db.branch_id IS NOT NULL), '[]') AS branch_ids,
+              COALESCE(json_agg(b.name ORDER BY db.branch_id) FILTER (WHERE b.name IS NOT NULL), '[]') AS branch_names
+       FROM departments d
+       LEFT JOIN department_branches db ON d.id = db.department_id
+       LEFT JOIN branches b ON db.branch_id = b.id
+       GROUP BY d.id
+       ORDER BY d.name`,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/departments/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT d.*, 
+              COALESCE(json_agg(db.branch_id ORDER BY db.branch_id) FILTER (WHERE db.branch_id IS NOT NULL), '[]') AS branch_ids,
+              COALESCE(json_agg(b.name ORDER BY db.branch_id) FILTER (WHERE b.name IS NOT NULL), '[]') AS branch_names
+       FROM departments d
+       LEFT JOIN department_branches db ON d.id = db.department_id
+       LEFT JOIN branches b ON db.branch_id = b.id
+       WHERE d.id = $1
+       GROUP BY d.id`,
+      [req.params.id],
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/departments", async (req, res) => {
+  const { branch_ids = [], ...payload } = req.body;
+  const branchIds = Array.isArray(branch_ids)
+    ? branch_ids.filter(Boolean)
+    : branch_ids
+      ? [branch_ids]
+      : [];
+  const primaryBranch = branchIds.length ? branchIds[0] : null;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const sanitizedData = filterData("departments", payload);
+    sanitizedData.branch_id = primaryBranch;
+
+    const keys = Object.keys(sanitizedData).join(", ");
+    const placeholders = Object.keys(sanitizedData)
+      .map((_, i) => `$${i + 1}`)
+      .join(", ");
+    const query = `INSERT INTO departments (${keys}) VALUES (${placeholders}) RETURNING *`;
+    const result = await client.query(query, Object.values(sanitizedData));
+    const department = result.rows[0];
+
+    if (branchIds.length) {
+      const mappings = branchIds
+        .map((_, index) => `($1, $${index + 2})`)
+        .join(", ");
+      await client.query(
+        `INSERT INTO department_branches (department_id, branch_id) VALUES ${mappings}`,
+        [department.id, ...branchIds],
+      );
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json(department);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error creating department:", err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/departments/:id", async (req, res) => {
+  const { branch_ids = [], ...payload } = req.body;
+  const branchIds = Array.isArray(branch_ids)
+    ? branch_ids.filter(Boolean)
+    : branch_ids
+      ? [branch_ids]
+      : [];
+  const primaryBranch = branchIds.length ? branchIds[0] : null;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const sanitizedData = filterData("departments", payload);
+    sanitizedData.branch_id = primaryBranch;
+
+    const setClause = Object.keys(sanitizedData)
+      .map((key, i) => `${key} = $${i + 1}`)
+      .join(", ");
+    const values = [...Object.values(sanitizedData), req.params.id];
+    await client.query(
+      `UPDATE departments SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`,
+      values,
+    );
+
+    await client.query(
+      `DELETE FROM department_branches WHERE department_id = $1`,
+      [req.params.id],
+    );
+
+    if (branchIds.length) {
+      const mappings = branchIds
+        .map((_, index) => `($1, $${index + 2})`)
+        .join(", ");
+      await client.query(
+        `INSERT INTO department_branches (department_id, branch_id) VALUES ${mappings}`,
+        [req.params.id, ...branchIds],
+      );
+    }
+
+    await client.query("COMMIT");
+    const updated = await pool.query(
+      `SELECT d.*, 
+              COALESCE(json_agg(db.branch_id ORDER BY db.branch_id) FILTER (WHERE db.branch_id IS NOT NULL), '[]') AS branch_ids,
+              COALESCE(json_agg(b.name ORDER BY db.branch_id) FILTER (WHERE b.name IS NOT NULL), '[]') AS branch_names
+       FROM departments d
+       LEFT JOIN department_branches db ON d.id = db.department_id
+       LEFT JOIN branches b ON db.branch_id = b.id
+       WHERE d.id = $1
+       GROUP BY d.id`,
+      [req.params.id],
+    );
+    res.json(updated.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error updating department:", err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete("/api/departments/:id", (req, res) =>
+  remove("departments", req.params.id, res),
+);
+
+// Routes for Courses
+app.get("/api/courses", (req, res) =>
+  getAll(
+    "courses",
+    res,
+    "LEFT JOIN departments ON courses.department_id = departments.id",
+  ),
+);
+app.get("/api/courses/:id", (req, res) =>
+  getById("courses", req.params.id, res),
+);
+app.post("/api/courses", (req, res) => create("courses", req.body, res));
+app.put("/api/courses/:id", (req, res) =>
+  update("courses", req.params.id, req.body, res),
+);
+app.delete("/api/courses/:id", (req, res) =>
+  remove("courses", req.params.id, res),
+);
+
+// Routes for Finances
+app.get("/api/finances", (req, res) => getAll("finances", res));
+app.get("/api/finances/:id", (req, res) =>
+  getById("finances", req.params.id, res),
+);
+app.post("/api/finances", (req, res) => create("finances", req.body, res));
+app.put("/api/finances/:id", (req, res) =>
+  update("finances", req.params.id, req.body, res),
+);
+app.delete("/api/finances/:id", (req, res) =>
+  remove("finances", req.params.id, res),
+);
+
+// Routes for Expense Items - بنود المصروفات
+app.get("/api/expense_items", (req, res) => getAll("expense_items", res));
+app.get("/api/expense_items/:id", (req, res) =>
+  getById("expense_items", req.params.id, res),
+);
+app.post("/api/expense_items", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // تنقية البيانات بناءً على القائمة المسموحة أولاً
+    const rawData = filterData("expense_items", req.body);
+    const sanitizedData = { ...rawData };
+
+    // تصحيح أنواع البيانات الخاصة ببند المصروفات
+    if (sanitizedData.is_mandatory !== undefined) {
+      sanitizedData.is_mandatory =
+        String(sanitizedData.is_mandatory).toLowerCase() === "true" ||
+        sanitizedData.is_mandatory === true;
+    }
+    if (sanitizedData.is_service !== undefined) {
+      sanitizedData.is_service =
+        String(sanitizedData.is_service).toLowerCase() === "true" ||
+        sanitizedData.is_service === true;
+    }
+    if (sanitizedData.amount !== undefined)
+      sanitizedData.amount = Number(sanitizedData.amount);
+
+    // 1. إنشاء بند المصروفات الجديد
+    const keys = Object.keys(sanitizedData).join(", ");
+    const placeholders = Object.keys(sanitizedData)
+      .map((_, i) => `$${i + 1}`)
+      .join(", ");
+    const query = `INSERT INTO expense_items (${keys}) VALUES (${placeholders}) RETURNING *`;
+    const result = await client.query(query, Object.values(sanitizedData));
+    const newItem = result.rows[0];
+
+    // 2. إذا كان إلزامياً، يتم إضافته فوراً لجميع الطلاب الحاليين المطابقين للقسم والفرقة
+    if (newItem.is_mandatory) {
+      await client.query(
+        `
+        INSERT INTO student_fees (student_id, expense_item_id, amount_due, status)
+        SELECT id, $1, $2, 'pending'
+        FROM students
+        WHERE ($3::INTEGER IS NULL OR department_id = $3::INTEGER)
+        AND ($4::VARCHAR IS NULL OR $4::VARCHAR = '' OR $4::VARCHAR = 'كل الفرق' OR class_year = $4::VARCHAR)
+      `,
+        [newItem.id, newItem.amount, newItem.department_id, newItem.class_year],
+      );
+    }
+    await client.query("COMMIT");
+    res.status(201).json(newItem);
+  } catch (err) {
+    console.error("Error in POST /api/expense_items transaction:", err.message);
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+app.put("/api/expense_items/:id", (req, res) =>
+  update("expense_items", req.params.id, req.body, res),
+);
+app.delete("/api/expense_items/:id", (req, res) =>
+  remove("expense_items", req.params.id, res),
+);
+
+// Routes for Student Fees - مصروفات الطلاب
+app.get("/api/student-fees", (req, res) =>
+  getAll(
+    "student_fees",
+    res,
+    "sf LEFT JOIN expense_items ei ON sf.expense_item_id = ei.id",
+  ),
+);
+
+app.get("/api/student-fees/:studentId", async (req, res) => {
+  try {
+    const query = `
+      SELECT sf.id, sf.student_id, sf.expense_item_id, sf.is_selected, sf.amount_due, sf.amount_paid, 
+             (sf.amount_due - sf.amount_paid) as remaining_balance, sf.status, 
+             COALESCE(ei.name, 'بند غير معروف') as item_name 
+      FROM student_fees sf 
+      LEFT JOIN expense_items ei ON sf.expense_item_id = ei.id 
+      WHERE sf.student_id = $1
+    `;
+    const result = await pool.query(query, [req.params.studentId]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/student-fees/pay", async (req, res) => {
+  const { feeId, amount } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      "UPDATE student_fees SET amount_paid = amount_paid + $1, status = CASE WHEN (amount_due - (amount_paid + $1)) <= 0 THEN 'paid' ELSE 'pending' END, paid_date = CURRENT_DATE WHERE id = $2 RETURNING *",
+      [amount, feeId],
+    );
+    if (result.rows.length === 0) {
+      throw new Error("Fee record not found");
+    }
+
+    const fee = result.rows[0];
+    const studentRes = await client.query(
+      "SELECT branch_id FROM students WHERE id = $1",
+      [fee.student_id],
+    );
+    let branchId = studentRes.rows[0]?.branch_id;
+
+    // If student doesn't have branch_id, get it from department
+    if (!branchId && fee.student_id) {
+      const deptRes = await client.query(
+        "SELECT d.branch_id FROM students s JOIN departments d ON s.department_id = d.id WHERE s.id = $1",
+        [fee.student_id],
+      );
+      branchId = deptRes.rows[0]?.branch_id;
+    }
+    let updatedFinance = null;
+
+    if (branchId) {
+      const today = new Date().toISOString().split("T")[0];
+      const financeRes = await client.query(
+        "SELECT * FROM finances WHERE branch_id = $1 AND date = $2 FOR UPDATE",
+        [branchId, today],
+      );
+
+      if (financeRes.rows.length > 0) {
+        const existing = financeRes.rows[0];
+        const newRevenue = Number(existing.revenue) + Number(amount);
+        const newCashBalance = Number(existing.cash_balance) + Number(amount);
+        const updateFinance = await client.query(
+          "UPDATE finances SET revenue = $1, cash_balance = $2 WHERE id = $3 RETURNING *",
+          [newRevenue, newCashBalance, existing.id],
+        );
+        updatedFinance = updateFinance.rows[0];
+      } else {
+        const insertFinance = await client.query(
+          "INSERT INTO finances (branch_id, date, revenue, expenses, cash_balance, notes) VALUES ($1, $2, $3, 0, $3, $4) RETURNING *",
+          [branchId, today, amount, "تحصيل رسوم الطلاب"],
+        );
+        updatedFinance = insertFinance.rows[0];
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ fee, finance: updatedFinance });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/student-fees/assign", async (req, res) => {
+  const { studentId, expenseItemId } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO student_fees (student_id, expense_item_id, amount_due, status)
+       SELECT $1, id, amount, 'pending' FROM expense_items WHERE id = $2
+       RETURNING *`,
+      [studentId, expenseItemId],
+    );
+    res.status(201).json(result.rows[0]);
+ Ascending (descending)
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/student-fees", (req, res) =>
+  create("student_fees", req.body, res),
+);
+app.put("/api/student-fees/:id", (req, res) =>
+  update("student_fees", req.params.id, req.body, res),
+);
+app.delete("/api/student-fees/:id", (req, res) =>
+  remove("student_fees", req.params.id, res),
+);
+
+// Routes for Student Grades
+app.get("/api/student-grades", (req, res) => getAll("student_grades", res));
+app.get("/api/student-grades/:studentId", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM student_grades WHERE student_id = $1 ORDER BY created_at DESC`,
+      [req.params.studentId],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/student-grades", (req, res) =>
+  create("student_grades", req.body, res),
+);
+app.put("/api/student-grades/:id", (req, res) =>
+  update("student_grades", req.params.id, req.body, res),
+);
+app.delete("/api/student-grades/:id", (req, res) =>
+  remove("student_grades", req.params.id, res),
+);
+
+// Routes for Student Attendance
+app.get("/api/student-attendance/:studentId", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM student_attendance WHERE student_id = $1 ORDER Ascending (descending)
+      [req.params.studentId],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/student-attendance", (req, res) =>
+  create("student_attendance", req.body, res),
+);
+app.put("/api/student-attendance/:id", (req, res) =>
+  update("student_attendance", req.params.id, req.body, res),
+);
+app.delete("/api/student-attendance/:id", (req, res) =>
+  remove("student_attendance", req.params.id, res),
+);
+
+// Login endpoint
+app.post("/api/login", async (req, res) => {
+  try {
+    const Ascending (descending)
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+    const user Ascending (descending)
+
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ Ascending (descending) });
+    }
+
+    // Super admin full access, others branch-restricted
+    const token = jwt.sign(
+      { id: user.id, role: user.role, branch_id: user.branch_id },
+      JWT_SECRET,
+      { expiresIn: "24h" },
+    );
+
+    // Hide password in response
+    const { password_hash, ...safeUser } = user;
+
+    res.json({
+      token,
+      user: safeUser,
+      message: "Login successful",
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Apply auth to protected routes
+const protectedTables = [
+  "students",
+  "courses",
+  "finances",
+  "expense_items",
+  "student_fees",
+  "student_grades",
+  "student_attendance",
+];
+
+// Protect business routes (branches/users public for admin panel)
+app.use("/api/students", authenticateToken, restrictToBranch(protectedTables));
+app.use("/api/courses", authenticateToken, restrictToBranch(protectedTables));
+app Ascending (descending)
+app.use("/api/finances", authenticateToken, restrictToBranch(protectedTables));
+app.use(
+  "/api/expense_items",
+  authenticateToken,
+  restrictToBranch(protectedTables),
+);
+app.use(
+  "/api/student-fees",
+ Ascending (descending)
+app.use(
+  "/api/student-grades",
+  authenticateToken,
+  restrictToBranch(protectedTables),
+);
+app.use(
+  "/api/student-attendance",
+ Ascending (descending)
+);
+
+// Protect permissions routes
+app.use("/api/permissions", authenticateToken);
+
+// Health check (public)
+app.get("/health Ascending (descending)
+app.get("/health", (req, res) => res.json({ status: "OK", db: "Connected" }));
+
+// Permissions endpoints
+app.get("/api/permissions/me", authenticateToken, async (req, res) => {
+  try {
+    // Admin has full access to everything
+    if (req.user.role === "admin") {
+      const allResources = [
+        "users",
+        "students",
+        "branches",
+        "departments",
+        "courses",
+        "finances",
+        "expense Ascending (descending)
+
+      const permissions = allResources.map((resource) => ({
+        resource,
+        can_read: true,
+        can_create Ascending (descending)
+
+      return res.json({ permissions });
+    }
+
+    // Get permissions for other roles
+    const result = await pool.query(
+      "SELECT * FROM role_permissions WHERE role = $1",
+      [req.user.role],
+    );
+
+    res Ascending (descending)
+  } catch (err) {
+    console.error("Error fetching permissions:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all role permissions (admin only)
+app.get("/api/permissions", Ascending (descending)
+  console.log(`GET /api/permissions by user ${req.user?.id}`);
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM role_permissions ORDER BY role, resource",
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching all permissions:", Ascending (descending)
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update role permissions (admin only)
+app.put("/api/permissions/: Ascending (descending)
+  console.log(`PUT /api/permissions/${req.params.id} by user ${req.user?.id}`);
+
+  // Validate ID param
+  if (
+    !req.params.id ||
+    req.params.id === "undefined" ||
+ Ascending (descending)
+  ) {
+    return res.status(400 Ascending (descending)
+
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const updateFields = {};
+    const values = [];
+    let paramIndex = 1;
+
+    if ("can_read" in req.body) {
+      updateFields.can_read = `$${paramIndex}`;
+      values.push(req.body.can_read);
+      paramIndex++;
+    }
+    if ("can_create" in req.body) {
+      updateFields.can_create = `$${param Ascending (descending)
+      values.push(req.body.can_create);
+      paramIndex++;
+    }
+    if ("can_update" in req.body) {
+      updateFields.can_update = `$${paramIndex}`;
+      values.push(req.body.can_update);
+      paramIndex++;
+    }
+    if ("can_delete" in req.body) {
+      updateFields.can_delete = `$${paramIndex}`;
+      values.push(req.body.can_delete);
+      paramIndex++;
+    }
+    if ("branch_access" in req.body) {
+      updateFields.branch_access = `$${paramIndex}`;
+      values.push(req.body.branch_access);
+      paramIndex++;
+    }
+
+    updateFields.updated_at = "CURRENT_TIMESTAMP";
+
+    const setClause = Object.entries(updateFields)
+      .map(([key, value]) => `${key} Ascending (descending)
+      .join(", ");
+
+    const result = await pool Ascending (descending)
+
+  } catch (err) {
+    console.error("Error updating permission:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create or update a permission record (admin only)
+app.post("/api/permissions", authenticateToken, async (req, res) => {
+ Ascending (descending)
+    `POST /api/permissions Ascending (descending)
+  try {
+    if (req.user Ascending (descending)
+
+    const {
+      role,
+      resource,
+      can_read,
+      can_create,
+      can_update,
+ Ascending (descending)
+    } = req.body;
+    const validResources = [
+      "users",
+      "students",
+      "branches",
+      "departments",
+      "courses",
+      "finances",
+      "expense_items",
+      "student_fees",
+      "student_grades",
+      "student_attendance",
+      "activity_logs",
+      "inventory",
+      "reports",
+    ];
+
+    if (!role || !resource || !validResources.includes(resource)) {
+      return res.status(400).json({ error: "Invalid role or resource" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO role_permissions (role, resource, can_read, can_create, can_update, can_delete, branch_access)
+      VALUES ($1, $2, $3, $4 Ascending (descending)
+
+  } catch (err) {
+    console.error("Error creating or updating permission:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
+  console.log(`✅ Auth enabled - Login required for data access`);
+});

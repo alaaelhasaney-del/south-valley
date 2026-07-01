@@ -1,0 +1,60 @@
+
+=====================================
+MIGRATION REPORT
+=====================================
+Generated: 2026-06-02T00:58:14.289Z
+
+SUMMARY:
+========
+Total Successful: 31
+Total Errors: 10
+
+SUCCESSFUL MIGRATIONS:
+=====================
+[2026-06-02T00:58:01.218Z] INFO: ==================================================
+[2026-06-02T00:58:01.220Z] INFO: Starting photo migration process...
+[2026-06-02T00:58:01.220Z] INFO: ==================================================
+[2026-06-02T00:58:02.278Z] INFO: Found 10 students with photos to migrate
+[2026-06-02T00:58:02.279Z] INFO: --------------------------------------------------
+[2026-06-02T00:58:02.281Z] INFO: Uploading image for student 1: student-1-1780361882280.jpg
+[2026-06-02T00:58:03.024Z] INFO: ✓ Successfully uploaded image for student 1: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-1-1780361882280.jpg
+[2026-06-02T00:58:03.231Z] INFO: Uploading image for student 3: student-3-1780361883231.jpg
+[2026-06-02T00:58:03.684Z] INFO: ✓ Successfully uploaded image for student 3: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-3-1780361883231.jpg
+[2026-06-02T00:58:04.289Z] INFO: Uploading image for student 4: student-4-1780361884289.jpg
+[2026-06-02T00:58:04.787Z] INFO: ✓ Successfully uploaded image for student 4: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-4-1780361884289.jpg
+[2026-06-02T00:58:05.870Z] INFO: Uploading image for student 5: student-5-1780361885869.jpg
+[2026-06-02T00:58:06.354Z] INFO: ✓ Successfully uploaded image for student 5: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-5-1780361885869.jpg
+[2026-06-02T00:58:07.002Z] INFO: Uploading image for student 6: student-6-1780361887002.jpg
+[2026-06-02T00:58:07.434Z] INFO: ✓ Successfully uploaded image for student 6: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-6-1780361887002.jpg
+[2026-06-02T00:58:08.102Z] INFO: Uploading image for student 7: student-7-1780361888102.jpg
+[2026-06-02T00:58:08.657Z] INFO: ✓ Successfully uploaded image for student 7: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-7-1780361888102.jpg
+[2026-06-02T00:58:09.549Z] INFO: Uploading image for student 11: student-11-1780361889548.jpg
+[2026-06-02T00:58:09.908Z] INFO: ✓ Successfully uploaded image for student 11: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-11-1780361889548.jpg
+[2026-06-02T00:58:10.962Z] INFO: Uploading image for student 12: student-12-1780361890962.jpg
+[2026-06-02T00:58:11.213Z] INFO: ✓ Successfully uploaded image for student 12: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-12-1780361890962.jpg
+[2026-06-02T00:58:12.061Z] INFO: Uploading image for student 13: student-13-1780361892061.jpg
+[2026-06-02T00:58:12.399Z] INFO: ✓ Successfully uploaded image for student 13: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-13-1780361892061.jpg
+[2026-06-02T00:58:13.149Z] INFO: Uploading image for student 14: student-14-1780361893148.jpg
+[2026-06-02T00:58:13.570Z] INFO: ✓ Successfully uploaded image for student 14: https://tpzxzfofebodzclitwtl.supabase.co/storage/v1/object/public/images/students/student-14-1780361893148.jpg
+[2026-06-02T00:58:14.288Z] INFO: --------------------------------------------------
+[2026-06-02T00:58:14.288Z] INFO: Migration Summary:
+[2026-06-02T00:58:14.288Z] INFO:   ✓ Successful: 0
+[2026-06-02T00:58:14.288Z] INFO:   ⊘ Skipped: 0
+[2026-06-02T00:58:14.288Z] INFO:   ✗ Errors: 10
+[2026-06-02T00:58:14.288Z] INFO: ==================================================
+
+ERRORS:
+=======
+[2026-06-02T00:58:03.130Z] ERROR: ✗ Failed to update database for student 1: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:04.180Z] ERROR: ✗ Failed to update database for student 3: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:05.761Z] ERROR: ✗ Failed to update database for student 4: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:06.900Z] ERROR: ✗ Failed to update database for student 5: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:07.997Z] ERROR: ✗ Failed to update database for student 6: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:09.442Z] ERROR: ✗ Failed to update database for student 7: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:10.861Z] ERROR: ✗ Failed to update database for student 11: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:11.959Z] ERROR: ✗ Failed to update database for student 12: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:13.038Z] ERROR: ✗ Failed to update database for student 13: column "image_upload_date" of relation "students" does not exist
+[2026-06-02T00:58:14.180Z] ERROR: ✗ Failed to update database for student 14: column "image_upload_date" of relation "students" does not exist
+
+====================================
+  

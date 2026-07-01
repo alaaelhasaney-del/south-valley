@@ -1,0 +1,23 @@
+
+=====================================
+MIGRATION REPORT
+=====================================
+Generated: 2026-06-02T00:37:47.003Z
+
+SUMMARY:
+========
+Total Successful: 3
+Total Errors: 1
+
+SUCCESSFUL MIGRATIONS:
+=====================
+[2026-06-02T00:37:44.698Z] INFO: ==================================================
+[2026-06-02T00:37:44.705Z] INFO: Starting photo migration process...
+[2026-06-02T00:37:44.705Z] INFO: ==================================================
+
+ERRORS:
+=======
+[2026-06-02T00:37:47.002Z] ERROR: Critical error in migration: getaddrinfo ENOTFOUND db
+
+====================================
+  
