@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "migrate:photos": "node -r dotenv/config scripts/migrate-photos-to-storage.js",
     "test:images": "node tests/image-management.test.js",
-    "db:migrate": "psql $DATABASE_URL < migrations/001-add-image-url-column.sql"
+    "db:migrate": "psql $DATABASE_URL < migrations/001-add-image-url-column.sql",
+    "vercel-build": "echo 'No build needed for this project'"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
